@@ -16,7 +16,7 @@ mp_face_mesh = mp.solutions.face_mesh.FaceMesh(static_image_mode=False, refine_l
 KNOWN_FACES_DIR = r"G:\Python Programs\StoredEmbeddings"
 
 def extract_landmarks(image):
-    """ Extracts facial lan+-dmarks using MediaPipe """
+    """ Extracts facial landmarks using MediaPipe """
     image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
     results = mp_face_mesh.process(image_rgb)
     if results.multi_face_landmarks:
@@ -39,7 +39,6 @@ def generate_embedding(face_image):
     """ Generate ArcFace embedding """
     embedding = DeepFace.represent(face_image, model_name="ArcFace", enforce_detection=False)
     return np.array(embedding[0]["embedding"]) if embedding else None
-
 
 # Real-time Face Recognition
 url = "http://192.168.166.65:8080/video"
@@ -75,23 +74,47 @@ def recognize_face(frame, stored_embeddings, threshold=0.6):
 if __name__ == "__main__":
     stored_embeddings = load_stored_embeddings()
     cap = cv2.VideoCapture(url)
+
     while True:
         ret, frame = cap.read()
         if not ret:
             break
 
         match, landmarks, confidence = recognize_face(frame, stored_embeddings)
-        if landmarks:
-            for lm in landmarks.landmark:
-                x, y = int(lm.x * frame.shape[1]), int(lm.y * frame.shape[0])
-                cv2.circle(frame, (x, y), 1, (255, 0, 0), -1)
 
-        label = f"{match} ({confidence:.2f})" if confidence else "Unknown"
-        cv2.putText(frame, label, (30, 30), cv2.FONT_HERSHEY_SIMPLEX, 3, (0, 255, 0), 2)
-        cv2.imshow("Face Recognition", frame)
+        # Detect face bounding box
+        faces = app.get(frame)
+        if faces:
+            x1, y1, x2, y2 = faces[0].bbox.astype(int)
+            
+            # Add padding and ensure within image bounds
+            h, w, _ = frame.shape
+            padding = int(0.2 * (y2 - y1))  # 20% padding
+            x1, y1 = max(x1 - padding, 0), max(y1 - padding, 0)
+            x2, y2 = min(x2 + padding, w), min(y2 + padding, h)
+
+            # Crop and resize the frame to 640x640
+            cropped_frame = frame[y1:y2, x1:x2]
+            cropped_frame = cv2.resize(cropped_frame, (640, 640))
+
+            # Draw landmarks if available
+            if landmarks:
+                for lm in landmarks.landmark:
+                    x, y = int(lm.x * cropped_frame.shape[1]), int(lm.y * cropped_frame.shape[0])
+                    cv2.circle(cropped_frame, (x, y), 1, (255, 0, 0), -1)
+
+            label = f"{match} ({confidence:.2f})" if confidence else "Unknown"
+            cv2.putText(cropped_frame, label, (30, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+
+            # Display cropped face
+            cv2.imshow("Face Recognition", cropped_frame)
+        else:
+            cv2.imshow("Face Recognition", frame)  # Show original if no face detected
 
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
 
     cap.release()
-    cv2.destroyAllWindows()
+    cv2.destroyAllWindows() 
+
+#problems : resize, uses all frames, uses cpu instead of gpu
