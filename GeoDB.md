@@ -1,4 +1,4 @@
-#MySql Database DDL
+# MySql Database DDL
 
 ```sql
 
